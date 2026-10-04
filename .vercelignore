@@ -1,0 +1,16 @@
+.runtime/
+.git/
+.openai/
+.sites-runtime/
+.agents/
+.codex/
+node_modules/
+services/
+database/
+.vendor/
+.next/
+.wrangler/
+.vinext/
+dist/
+*.db
+.env*
