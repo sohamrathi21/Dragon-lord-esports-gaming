@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.DataProtection;
 using Dapper;
 using DragonLord.Api;
 using DragonLord.Domain;
@@ -15,6 +16,7 @@ var connection = builder.Configuration.GetConnectionString("Cafe") ?? throw new 
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connection));
 builder.Services.AddSingleton<Store>();
 builder.Services.AddSignalR();
+if(builder.Environment.IsDevelopment())builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath,".runtime","data-protection"))).SetApplicationName("DragonLord.Local");
 builder.Services.AddHttpClient<Razorpay>(c=>c.Timeout=TimeSpan.FromSeconds(20));
 builder.Services.AddHttpClient("n8n",c=>c.Timeout=TimeSpan.FromSeconds(10));
 builder.Services.AddHostedService<AutomationWorker>();
