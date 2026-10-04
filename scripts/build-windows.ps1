@@ -31,6 +31,10 @@ function Get-WixTree([string]$folder, [string]$directoryId) {
             [void]$script:componentRefs.Append("<ComponentRef Id=`"Component$id`" />")
         }
     }
+    $cleanup = "Cleanup$directoryId"
+    $cleanupGuid = [Guid]::NewGuid().ToString()
+    [void]$xml.Append("<Component Id=`"$cleanup`" Guid=`"$cleanupGuid`" Win64=`"yes`"><RegistryValue Root=`"HKCU`" Key=`"Software\DragonLord\Desktop\Directories`" Name=`"$directoryId`" Type=`"integer`" Value=`"1`" KeyPath=`"yes`" /><RemoveFolder Id=`"Remove$cleanup`" Directory=`"$directoryId`" On=`"uninstall`" /></Component>")
+    [void]$script:componentRefs.Append("<ComponentRef Id=`"$cleanup`" />")
     return $xml.ToString()
 }
 $tree = Get-WixTree $publishDir 'INSTALLFOLDER'
@@ -42,7 +46,7 @@ $product = Join-Path $releaseDir 'Product.wxs'
   <Product Id="*" Name="Dragon Lord Esports Gaming" Language="1033" Version="$Version" Manufacturer="Dragon Lord Esports Gaming" UpgradeCode="2D6BC8EF-DCB2-4948-9A3D-6549BBE89875">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" InstallPrivileges="limited" Platform="x64" />
     <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
-    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="mszip" />
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="LocalAppDataFolder"><Directory Id="INSTALLFOLDER" Name="Dragon Lord Esports Gaming" /></Directory>
       <Directory Id="ProgramMenuFolder"><Directory Id="ApplicationProgramsFolder" Name="Dragon Lord Esports Gaming" /></Directory>

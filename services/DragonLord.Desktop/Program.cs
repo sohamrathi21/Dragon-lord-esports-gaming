@@ -73,7 +73,7 @@ public sealed class WorkspaceWindow : Window
                 { e.Cancel = true; OpenExternal(e.Uri); }
                 else status.Text = "Connecting…";
             };
-            browser.CoreWebView2.NavigationCompleted += (_, e) => status.Text = e.IsSuccess ? "Connected · Desktop 0.1.0" : "Connection failed · Check internet and reload";
+            browser.CoreWebView2.NavigationCompleted += (_, e) => status.Text = e.IsSuccess ? "Website loaded · Desktop 0.1.0" : "Connection failed · Check internet and reload";
             browser.Source = origin;
         }
         catch (WebView2RuntimeNotFoundException)
