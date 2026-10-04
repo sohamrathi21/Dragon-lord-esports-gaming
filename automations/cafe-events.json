@@ -1,0 +1,125 @@
+{
+  "name": "Dragon Lord · verified café events",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dragon-lord-events",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "dragon-webhook",
+      "name": "Verified café event",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "dragon-lord-events"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.body.eventId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "validate-event",
+      "name": "Require event ID",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"accepted\":true,\"eventId\":\"{{ $json.body.eventId }}\"}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "ack-event",
+      "name": "Acknowledge event",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        480,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"accepted\":false,\"error\":\"Missing eventId\"}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "reject-event",
+      "name": "Reject malformed event",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        480,
+        100
+      ]
+    }
+  ],
+  "connections": {
+    "Verified café event": {
+      "main": [
+        [
+          {
+            "node": "Require event ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Require event ID": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject malformed event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {},
+  "id": "dragonlordevents01"
+}

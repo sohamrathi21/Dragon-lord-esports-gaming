@@ -1,0 +1,7 @@
+.git
+.runtime
+node_modules
+dist
+**/bin
+**/obj
+.env*

@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const base='http://127.0.0.1:5081';let cookie='';let checks=0;
+async function call(path,body,expected=200,key=crypto.randomUUID(),useCookie=cookie){const r=await fetch(base+path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json','X-Dragon-Request':'1','Idempotency-Key':key,...(useCookie?{Cookie:useCookie}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})});const cookies=r.headers.getSetCookie();if(cookies.length)cookie=cookies.map(x=>x.split(';')[0]).join('; ');const text=await r.text();assert.equal(r.status,expected,`${path}: ${text.slice(0,500)}`);checks++;try{return JSON.parse(text);}catch{return {};}}
+await call('/api/workspace',undefined,401,undefined,'');
+const status=await call('/api/auth/status');let account;
+if(status.needsSetup){account={name:'Integration Test Owner',email:'owner@test.invalid',password:crypto.randomUUID()+crypto.randomUUID()};fs.writeFileSync('.runtime/test-account.json',JSON.stringify(account));await call('/api/auth/setup',account);}else{account=JSON.parse(fs.readFileSync('.runtime/test-account.json'));await call('/api/auth/login',account);}
+const ownerCookie=cookie;
+const stamp=Date.now();const customer=await call('/api/customers',{name:'Integration Player '+stamp,email:'player@test.invalid',member:true});
+let state=await call('/api/workspace');assert.equal(state.stations.length,14);
+const payment={customerId:customer.id,amountMinor:50000,idempotencyKey:crypto.randomUUID()};
+await call('/api/payments/cash',payment);await call('/api/payments/cash',payment);
+state=await call('/api/workspace');assert.equal(state.customers.find(c=>c.id===customer.id).balance,50000);
+await call('/api/payments/cash',{...payment,amountMinor:60000},400);
+const session=await call('/api/sessions',{customerId:customer.id,stationId:'PC-01',minutes:60,idempotencyKey:crypto.randomUUID()});
+await call('/api/actions/pause',{sessionId:session.id});
+await call('/api/actions/resume',{sessionId:session.id});
+await call('/api/actions/transfer',{sessionId:session.id,stationId:'PC-02'});
+await call('/api/actions/extend',{sessionId:session.id,minutes:30});
+const end=await call(`/api/sessions/${session.id}/end`,{reason:'Integration test'});assert.ok(end.chargeMinor>=0&&end.chargeMinor<=15000);
+await call(`/api/sessions/${session.id}/end`,{reason:'Duplicate test'});
+state=await call('/api/workspace');assert.equal(state.ledger.filter(l=>l.key==='session:'+session.id).length,1);assert.equal(state.customers.find(c=>c.id===customer.id).balance,50000-end.chargeMinor);
+const booking={customerId:customer.id,stationIds:['PC-03'],start:new Date(Date.now()+3600000).toISOString(),end:new Date(Date.now()+7200000).toISOString(),idempotencyKey:crypto.randomUUID()};
+const reservation=await call('/api/reservations',booking);await call('/api/reservations',{...booking,idempotencyKey:crypto.randomUUID()},409);await call('/api/actions/cancelBooking',{id:reservation.id});
+await call('/api/actions/handover',{body:'Integration handover '+stamp,priority:'Normal'});assert.ok((await call('/api/handover')).length);
+await call('/api/actions/product',{name:'Test Coffee '+stamp,category:'Test',price:10000,stock:2});state=await call('/api/workspace');const product=state.products.find(p=>p.name==='Test Coffee '+stamp);
+const order=await call('/api/orders',{customerId:customer.id,stationId:'PC-01',productId:product.id,quantity:1,idempotencyKey:crypto.randomUUID()});await call('/api/actions/orderStatus',{id:order.id,status:'Cancelled'});
+const cashier={name:'Test Cashier',email:`cashier-${stamp}@test.invalid`,password:crypto.randomUUID()+crypto.randomUUID(),role:'Cashier'};await call('/api/staff',cashier);await call('/api/auth/logout',{});await call('/api/auth/login',cashier);
+await call('/api/actions/refund',{customerId:customer.id,amount:100,reason:'Not allowed'},403);await call('/api/actions/settings',{},403);
+cookie=ownerCookie;await call('/api/integrations');await call('/api/payments/razorpay/orders',{customerId:customer.id,amountMinor:10000,intentId:crypto.randomUUID()},400);
+await call('/hubs/venue/negotiate?negotiateVersion=1',{});
+console.log(`PASS: ${checks} live HTTP checks; billing, idempotency, reservations, roles, inventory, handover and SignalR negotiation verified against PostgreSQL.`);
