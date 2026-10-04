@@ -17,6 +17,8 @@ var runtimeFile=Environment.GetEnvironmentVariable("DRAGON_CONFIG");
 if(!string.IsNullOrEmpty(runtimeFile))builder.Configuration.AddJsonFile(runtimeFile,optional:false,reloadOnChange:true);
 var connection = builder.Configuration.GetConnectionString("Cafe") ?? throw new InvalidOperationException("ConnectionStrings__Cafe is required.");
 var pg = new NpgsqlConnectionStringBuilder(connection);
+var rootCertificate = builder.Configuration["Database:RootCertificate"];
+if (!string.IsNullOrWhiteSpace(rootCertificate)) pg.RootCertificate = Path.IsPathRooted(rootCertificate) ? rootCertificate : Path.Combine(AppContext.BaseDirectory, rootCertificate);
 if(!builder.Environment.IsDevelopment()) { pg.SslMode = SslMode.VerifyFull; if(pg.MaxPoolSize > 5) pg.MaxPoolSize = 5; pg.Timeout = Math.Min(pg.Timeout,15); }
 builder.Services.AddSingleton(NpgsqlDataSource.Create(pg.ConnectionString));
 builder.Services.AddSingleton<Store>();

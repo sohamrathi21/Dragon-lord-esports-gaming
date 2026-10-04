@@ -12,6 +12,7 @@ public static class Accounts
         app.MapGet("/api/auth/status",async(NpgsqlDataSource source)=>{await using var c=await source.OpenConnectionAsync();return new{needsSetup=await c.QuerySingleAsync<bool>("SELECT NOT EXISTS(SELECT 1 FROM staff)")};});
         app.MapGet("/api/auth/me",(ClaimsPrincipal u)=>new{name=u.FindFirstValue("name"),role=u.FindFirstValue(ClaimTypes.Role),id=u.FindFirstValue("sub")}).RequireAuthorization();
         app.MapPost("/api/auth/setup",async(AccountInput input,NpgsqlDataSource source,HttpContext context)=>{
+            if(!app.Environment.IsDevelopment() && app.Configuration["Bootstrap:Enabled"]!="true") return Results.Json(new{error="Owner setup is restricted to the private deployment setup process."},statusCode:403);
             Validate(input);await using var c=await source.OpenConnectionAsync();await using var tx=await c.BeginTransactionAsync();
             await c.ExecuteAsync("SELECT pg_advisory_xact_lock(994621)",transaction:tx);
             if(await c.QuerySingleAsync<bool>("SELECT EXISTS(SELECT 1 FROM staff)",transaction:tx))return Results.Conflict(new{error="Owner account already exists. Sign in instead."});
