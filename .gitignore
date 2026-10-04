@@ -53,3 +53,5 @@ next-env.d.ts
 *.tsbuildinfo
 !/.env.example
 *.tar.gz
+
+.vercel

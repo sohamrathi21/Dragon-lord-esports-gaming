@@ -5,8 +5,6 @@
 .agents/
 .codex/
 node_modules/
-services/
-database/
 .vendor/
 .next/
 .wrangler/

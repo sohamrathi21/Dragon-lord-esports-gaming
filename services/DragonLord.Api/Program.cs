@@ -1,5 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.Repositories;
+using Microsoft.Extensions.Options;
 using Dapper;
 using DragonLord.Api;
 using DragonLord.Domain;
@@ -13,10 +16,18 @@ var builder = WebApplication.CreateBuilder(args);
 var runtimeFile=Environment.GetEnvironmentVariable("DRAGON_CONFIG");
 if(!string.IsNullOrEmpty(runtimeFile))builder.Configuration.AddJsonFile(runtimeFile,optional:false,reloadOnChange:true);
 var connection = builder.Configuration.GetConnectionString("Cafe") ?? throw new InvalidOperationException("ConnectionStrings__Cafe is required.");
-builder.Services.AddSingleton(NpgsqlDataSource.Create(connection));
+var pg = new NpgsqlConnectionStringBuilder(connection);
+if(!builder.Environment.IsDevelopment()) { pg.SslMode = SslMode.VerifyFull; if(pg.MaxPoolSize > 5) pg.MaxPoolSize = 5; pg.Timeout = Math.Min(pg.Timeout,15); }
+builder.Services.AddSingleton(NpgsqlDataSource.Create(pg.ConnectionString));
 builder.Services.AddSingleton<Store>();
 builder.Services.AddSignalR();
-if(builder.Environment.IsDevelopment())builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath,".runtime","data-protection"))).SetApplicationName("DragonLord.Local");
+builder.Services.AddDataProtection().SetApplicationName("DragonLord.Esports");
+if(builder.Environment.IsDevelopment())
+    builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath,".runtime","data-protection")));
+else {
+    builder.Services.AddSingleton<IXmlRepository,PostgresXmlRepository>();
+    builder.Services.AddSingleton<IConfigureOptions<KeyManagementOptions>,DatabaseKeyManagementOptions>();
+}
 builder.Services.AddHttpClient<Razorpay>(c=>c.Timeout=TimeSpan.FromSeconds(20));
 builder.Services.AddHttpClient("n8n",c=>c.Timeout=TimeSpan.FromSeconds(10));
 builder.Services.AddHostedService<AutomationWorker>();
@@ -34,20 +45,8 @@ builder.Services.AddAuthorization(o => {
 });
 DefaultTypeMap.MatchNamesWithUnderscores = true;
 var app = builder.Build();
-if(args.Contains("--migrate")) {
-    await using var db = await app.Services.GetRequiredService<NpgsqlDataSource>().OpenConnectionAsync();
-    await db.ExecuteAsync("CREATE TABLE IF NOT EXISTS schema_migrations(name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())");
-    foreach(var file in Directory.GetFiles(Path.Combine(AppContext.BaseDirectory,"migrations"),"*.sql").OrderBy(x=>x)) {
-        var name=Path.GetFileName(file); await using var tx=await db.BeginTransactionAsync();
-        await db.ExecuteAsync("SELECT pg_advisory_xact_lock(834621)",transaction:tx);
-        if(!await db.QuerySingleAsync<bool>("SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE name=@name)",new{name},tx)) {
-            await db.ExecuteAsync(await File.ReadAllTextAsync(file),transaction:tx);
-            await db.ExecuteAsync("INSERT INTO schema_migrations(name) VALUES(@name)",new{name},tx);
-        }
-        await tx.CommitAsync();
-    }
-    return;
-}
+await DatabaseMigrator.Apply(app.Services.GetRequiredService<NpgsqlDataSource>());
+if(args.Contains("--migrate")) return;
 app.Use(async (ctx,next) => { try { await next(); } catch(ArgumentException e) { ctx.Response.StatusCode=400; await ctx.Response.WriteAsJsonAsync(new{error=e.Message}); } catch(PostgresException e) when(e.SqlState is "23P01" or "23505" or "23514" or "40001") { ctx.Response.StatusCode=409; await ctx.Response.WriteAsJsonAsync(new{error="Conflict: reservation, balance or command already changed. Refresh and retry with the same idempotency key."}); } });
 // JSON custom-header requirement prevents cross-origin form posts; no permissive CORS.
 app.Use(async(ctx,next)=>{if(ctx.Request.Method=="POST"&&ctx.Request.Path.StartsWithSegments("/api")&&!ctx.Request.Path.StartsWithSegments("/api/payments/razorpay/webhook")&&ctx.Request.Headers["X-Dragon-Request"]!="1"){ctx.Response.StatusCode=403;await ctx.Response.WriteAsJsonAsync(new{error="Missing request header."});return;}await next();});

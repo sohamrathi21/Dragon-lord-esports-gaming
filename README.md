@@ -41,3 +41,5 @@ Detailed contracts and limitations are in [integrations](docs/INTEGRATIONS.md). 
 ## Windows download
 
 Public `/download` and the workspace navigation show Windows release details. Configure `VITE_WINDOWS_INSTALLER_URL` with the HTTPS URL of a real `.exe` or `.msi`, plus `VITE_WINDOWS_APP_VERSION`, `VITE_WINDOWS_DOWNLOAD_SIZE` and `VITE_WINDOWS_SUPPORTED_VERSIONS`, then rebuild. Until all release fields are present, the button shows Coming soon. Downloads begin only on click; users start installation themselves. No installer has been published.
+
+Vercel ASP.NET/PostgreSQL configuration and deployment limitations: [Vercel backend guide](docs/VERCEL_BACKEND.md).
